@@ -108,7 +108,7 @@ NTSTATUS MyIOControl(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp)
 
 // global variables
 const WCHAR deviceNameBuffer[] = L"\\Device\\Example"; // name to access from user space to the driver
-const WCHAR deviceLinkBuffer[] = L"\\DosDevice\\Alias"; // alias of the driver
+const WCHAR deviceLinkBuffer[] = L"\\DosDevices\\Alias"; // alias of the driver
 
 PDEVICE_OBJECT g_rootkitdevice; // global pointer to our device object
 
@@ -179,5 +179,5 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 	DriverObject->MajorFunction[IRP_MJ_CREATE]			= MyOpen;
 	DriverObject->MajorFunction[IRP_MJ_CLOSE]			= MyClose;
 
-	return ntStatus;
+	return STATUS_SUCCESS;
 }
