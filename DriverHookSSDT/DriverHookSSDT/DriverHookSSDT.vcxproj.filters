@@ -39,9 +39,15 @@
     <ClInclude Include="process_threads_structure.h">
       <Filter>Header Files\STRUCTURES</Filter>
     </ClInclude>
+    <ClInclude Include="query_directory_structs.h">
+      <Filter>Header Files\STRUCTURES</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="query_directory_functions.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

