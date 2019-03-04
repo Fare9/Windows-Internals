@@ -1,0 +1,51 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.421
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DriverHookIDT0x2E", "DriverHookIDT0x2E\DriverHookIDT0x2E.vcxproj", "{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|ARM = Debug|ARM
+		Debug|ARM64 = Debug|ARM64
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|ARM = Release|ARM
+		Release|ARM64 = Release|ARM64
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Debug|ARM.ActiveCfg = Debug|ARM
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Debug|ARM.Build.0 = Debug|ARM
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Debug|ARM.Deploy.0 = Debug|ARM
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Debug|ARM64.Build.0 = Debug|ARM64
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Debug|ARM64.Deploy.0 = Debug|ARM64
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Debug|x64.ActiveCfg = Debug|x64
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Debug|x64.Build.0 = Debug|x64
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Debug|x64.Deploy.0 = Debug|x64
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Debug|x86.ActiveCfg = Debug|Win32
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Debug|x86.Build.0 = Debug|Win32
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Debug|x86.Deploy.0 = Debug|Win32
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Release|ARM.ActiveCfg = Release|ARM
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Release|ARM.Build.0 = Release|ARM
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Release|ARM.Deploy.0 = Release|ARM
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Release|ARM64.ActiveCfg = Release|ARM64
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Release|ARM64.Build.0 = Release|ARM64
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Release|ARM64.Deploy.0 = Release|ARM64
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Release|x64.ActiveCfg = Release|x64
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Release|x64.Build.0 = Release|x64
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Release|x64.Deploy.0 = Release|x64
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Release|x86.ActiveCfg = Release|Win32
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Release|x86.Build.0 = Release|Win32
+		{E09E46CD-EC90-4069-8A7B-B19587AD9C8F}.Release|x86.Deploy.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {328761FE-64DE-453B-83E2-FA5414D69BBC}
+	EndGlobalSection
+EndGlobal
