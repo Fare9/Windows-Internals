@@ -30,7 +30,7 @@ __declspec(naked) MiKiSystemService()
 		mov fs, bx;				
 		push ds;				// save data segment
 		push es;				// save extra segment
-								// Código de detección o prevención aquí
+								
 	LogSyscall:
 		push edx;
 		push eax;
