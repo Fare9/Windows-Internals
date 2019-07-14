@@ -138,7 +138,29 @@ int main(int, char**)
                 return 0;
             }
 
-            ImGui::Checkbox("Monitor Processes", &checkbox);
+            if (ImGui::Checkbox("Monitor Processes", &checkbox))
+            {
+                if (checkbox)
+                {
+                    thread = CreateThread(
+                        nullptr,
+                        0,
+                        (LPTHREAD_START_ROUTINE)ThreadMonitor,
+                        nullptr,
+                        0,
+                        &thread_id
+                    );
+                }
+                else
+                {
+                    if (thread != NULL)
+                    {
+                        TerminateThread(thread, 0);
+                        CloseCommunicationWithDriver();
+                        thread = NULL;
+                    }
+                }
+            }
 
 
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
@@ -164,9 +186,7 @@ int main(int, char**)
             ImGui::NextColumn();
             ImGui::AlignTextToFramePadding();
 
-
-            if (checkbox)
-                ThreadMonitor();
+            PrintProcesses();
 
             ImGui::Columns(1);
             ImGui::Separator();
@@ -377,25 +397,22 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 VOID ThreadMonitor()
 {
-    static bool communication_opened = false;
 
-    if (!communication_opened)
+    if (!OpenCommunicationWithDriver(L"\\\\.\\DoraeMon"))
     {
-        if (!OpenCommunicationWithDriver(L"\\\\.\\DoraeMon"))
-        {
-            ImGui::Begin("ERROR MESSAGE");
-            ImGui::Text("There's a problem connecting to Driver");
-            ImGui::End();
-            return;
-        }
-        communication_opened = true;
-    }
-
-
-    if (!Monitorize())
-    {
-        CloseCommunicationWithDriver();
-        communication_opened = false;
+        printf("Error opening communication with driver");
         return;
     }
+
+    while (true)
+    {
+        if (!Monitorize())
+        {
+            CloseCommunicationWithDriver();
+            return;
+        }
+        Sleep(1 * 1000);
+    }
+    
+   
 }

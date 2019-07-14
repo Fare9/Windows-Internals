@@ -29,6 +29,7 @@ void HelpMarker(const char* desc)
 
 void ShowProcessOnList(Process process)
 {
+
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
     ImGui::Columns(6);
     ImGui::Separator();
@@ -69,16 +70,33 @@ void ShowProcessOnList(Process process)
 
     if (node_open)
     {
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 2));
+        ImGui::Columns(3);
+        ImGui::Separator();
+
+        ImGui::Text("Creation Time");
+        ImGui::NextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("Thread ID");
+        ImGui::NextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("State");
+        ImGui::NextColumn();
+        ImGui::AlignTextToFramePadding();
+
         for (auto thread : process.ThreadList())
         {
             ShowThreadOnList(thread);
         }
 
+        ImGui::Columns(1);
+        ImGui::Separator();
+        ImGui::PopStyleVar();
+
         ImGui::TreePop();
     }
 
     ImGui::PopID();
-
     ImGui::Columns(1);
     ImGui::Separator();
     ImGui::PopStyleVar();

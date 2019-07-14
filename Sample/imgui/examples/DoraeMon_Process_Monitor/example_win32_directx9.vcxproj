@@ -168,6 +168,7 @@
     <ClInclude Include="..\..\imgui_internal.h" />
     <ClInclude Include="..\imgui_impl_dx9.h" />
     <ClInclude Include="..\imgui_impl_win32.h" />
+    <ClInclude Include="DoraeMonCommon.h" />
     <ClInclude Include="DriverCommunication.h" />
     <ClInclude Include="headers.h" />
     <ClInclude Include="GUI_Processes_Functions.h" />

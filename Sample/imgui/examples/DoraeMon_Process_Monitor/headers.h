@@ -11,7 +11,7 @@
 #include <map>
 #include <vector>
 
-#include "../DoraeMon/DoraeMonCommon.h"
+#include "DoraeMonCommon.h"
 
 
 #endif // !HEADERS_H

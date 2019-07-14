@@ -84,6 +84,9 @@
     <ClInclude Include="GUI_Processes_Functions.h">
       <Filter>Headers</Filter>
     </ClInclude>
+    <ClInclude Include="DoraeMonCommon.h">
+      <Filter>Headers\DriverCommunication</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\README.txt" />
