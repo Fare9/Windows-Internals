@@ -64,11 +64,11 @@ VOID PrintStructure(BYTE* buffer, ItemHeader* item)
 	SYSTEMTIME systemtime;
 
 	FileTimeToSystemTime((FILETIME*)&item->Time, &systemtime);
-	auto hour = systemtime.wHour;
+	auto hour = systemtime.wHour + 2;
 	auto minute = systemtime.wMinute;
 	auto second = systemtime.wSecond;
 	
-	printf("================================>");
+	printf("[%02d:%02d:%02d]=============>", hour, minute, second);
 	switch (item->Type)
 	{
 	case ItemType::ProcessCreate:
@@ -76,18 +76,14 @@ VOID PrintStructure(BYTE* buffer, ItemHeader* item)
 		printf(" PROCESS CREATE\n");
 		auto processInfo = (ProcessCreateInfo*)item;
 
+		std::wstring CommandLine((WCHAR*)(buffer + processInfo->CommandLineOffset), processInfo->CommandLineLength);
+		std::wstring ImageFileName((WCHAR*)(buffer + processInfo->ImageFileNameOffset), processInfo->ImageFileNameLength);
+
 		printf("\tProcess ID: %X(%d)\n", processInfo->ProcessId, processInfo->ProcessId);
 		printf("\tParent PID: %X(%d)\n", processInfo->ParentProcessId, processInfo->ParentProcessId);
 		printf("\tSize: %X(%d)\n", processInfo->size, processInfo->size);
-		
-		
-		printf("\tTime: %02d:%02d:%02d\n", hour, minute, second);
-
-		std::wstring CommandLine((WCHAR*)(buffer + processInfo->CommandLineOffset), processInfo->CommandLineLength);
-
-		std::wstring ImageFileName((WCHAR*)(buffer + processInfo->ImageFileNameOffset), processInfo->ImageFileNameLength);
-
-		wprintf(L"\tIMAGEFILENAME: %-256ws\n\tCOMMANDLINE: %-256ws\n", ImageFileName.c_str(), CommandLine.c_str());
+		wprintf(L"\tImage File Name: \"%ws\"\n", ImageFileName.c_str());
+		wprintf(L"\tCommandline: \"%ws\"\n", CommandLine.c_str());
 
 		processes.insert(std::pair<ULONG, std::wstring>(processInfo->ProcessId, ImageFileName));
 		break;
@@ -100,13 +96,11 @@ VOID PrintStructure(BYTE* buffer, ItemHeader* item)
 
 
 		printf("\tProcess ID: %X(%d)\n", processInfo->ProcessId, processInfo->ProcessId);
-		printf("\tParent PID: %s(%s)\n", "None", "None");
 		printf("\tSize: %X(%d)\n", processInfo->size, processInfo->size);
-		printf("\tTime: %02d:%02d:%02d\n", hour, minute, second);
 
 		if (processes.find(processInfo->ProcessId) != processes.end())
 		{
-			printf("\tIMAGEFILENAME: %-256ws\n", processes[processInfo->ProcessId].c_str());
+			wprintf(L"\tImage File Name: \"%ws\"\n", processes[processInfo->ProcessId].c_str());
 			processes.erase(processInfo->ProcessId);
 		}
 		
@@ -120,13 +114,11 @@ VOID PrintStructure(BYTE* buffer, ItemHeader* item)
 
 		printf("\tThread ID: %X(%d)\n", threadinfo->ThreadId, threadinfo->ThreadId);
 		printf("\tProcess ID: %X(%d)\n", threadinfo->ProcessId, threadinfo->ProcessId);
-		printf("\tParent PID: %s(%s)\n", "None", "None");
 		printf("\tSize: %X(%d)\n", threadinfo->size, threadinfo->size);
-		printf("\tTime: %02d:%02d:%02d\n", hour, minute, second);
 
 		if (processes.find(threadinfo->ProcessId) != processes.end())
 		{
-			printf("\tIMAGEFILENAME: %-256ws\n", processes[threadinfo->ProcessId].c_str());
+			wprintf(L"\tImage File Name: \"%ws\"\n", processes[threadinfo->ProcessId].c_str());
 		}
 		break;
 	}
@@ -138,14 +130,30 @@ VOID PrintStructure(BYTE* buffer, ItemHeader* item)
 
 		printf("\tThread ID: %X(%d)\n", threadinfo->ThreadId, threadinfo->ThreadId);
 		printf("\tProcess ID: %X(%d)\n", threadinfo->ProcessId, threadinfo->ProcessId);
-		printf("\tParent PID: %s(%s)\n", "None", "None");
 		printf("\tSize: %X(%d)\n", threadinfo->size, threadinfo->size);
-		printf("\tTime: %02d:%02d:%02d\n", hour, minute, second);
 
 		if (processes.find(threadinfo->ProcessId) != processes.end())
 		{
-			printf("\tIMAGEFILENAME: %-256ws\n", processes[threadinfo->ProcessId].c_str());
+			wprintf(L"\tImage File Name: \"%ws\"\n", processes[threadinfo->ProcessId].c_str());
 		}
+		break;
+	}
+	case ItemType::ImageLoaded:
+	{
+		printf(" IMAGE LOAD\n");
+
+		auto imageloadinfo = (ImageLoadedInfo*)buffer;
+
+		printf("\tProcess ID: %X(%d)\n", imageloadinfo->ProcessId, imageloadinfo->ProcessId);
+		printf("\tImage Base: %p\n", imageloadinfo->ImageBase);
+		printf("\tSize: %X(%d)\n", imageloadinfo->size, imageloadinfo->size);
+
+		if (imageloadinfo->FullImageNameLength != 0 && imageloadinfo->FullImageNameOffset != 0)
+		{
+			std::wstring ImageFileName((WCHAR*)(buffer + imageloadinfo->FullImageNameOffset), imageloadinfo->FullImageNameLength);
+			wprintf(L"\tFull Image Name: \"%ws\"\n", ImageFileName.c_str());
+		}
+
 		break;
 	}
 	default:

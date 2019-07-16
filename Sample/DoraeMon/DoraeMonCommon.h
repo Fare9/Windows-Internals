@@ -9,7 +9,8 @@ enum class ItemType : short
 	ProcessCreate,
 	ProcessExit,
 	ThreadCreate,
-	ThreadExit
+	ThreadExit,
+	ImageLoaded
 };
 
 // Main Base struct
@@ -25,6 +26,7 @@ struct ProcessExitInfo : ItemHeader
 	ULONG ProcessId;
 };
 
+
 struct ProcessCreateInfo : ItemHeader
 {
 	ULONG ProcessId;
@@ -35,11 +37,20 @@ struct ProcessCreateInfo : ItemHeader
 	USHORT ImageFileNameOffset;
 };
 
+
 struct ThreadCreateExitInfo : ItemHeader
 {
 	ULONG ThreadId;
 	ULONG ProcessId;
 };
 
+
+struct ImageLoadedInfo : ItemHeader
+{
+	ULONG ProcessId;
+	PVOID ImageBase;
+	USHORT FullImageNameLength;
+	USHORT FullImageNameOffset;
+};
 
 #endif // !DORAEMONCOMMON_H

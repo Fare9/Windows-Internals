@@ -48,7 +48,6 @@ BOOL Monitorize()
 
 	if (bytes)
 	{
-		PrintHeader();
 		auto count = bytes;
 		auto local_buffer = buffer;
 
@@ -58,6 +57,7 @@ BOOL Monitorize()
 			PrintStructure(local_buffer, header);
 			local_buffer += header->size; 
 			count -= header->size;
+			Sleep(800);
 		}
 	}
 

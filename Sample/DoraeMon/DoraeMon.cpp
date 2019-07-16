@@ -9,6 +9,7 @@ NTSTATUS DoraeMonCreateClose(_In_ PDEVICE_OBJECT DeviceObject, _In_ PIRP  Irp);
 NTSTATUS DoraeMonRead(_In_ PDEVICE_OBJECT DeviceObject, _In_ PIRP  Irp);
 void OnProcessNotify(_Inout_ PEPROCESS Process, _In_ HANDLE ProcessId, _Inout_opt_ PPS_CREATE_NOTIFY_INFO CreateInfo);
 void OnThreadNotify(HANDLE ProcessId, HANDLE ThreadId, BOOLEAN Create);
+void OnLoadImageNotify(_In_opt_ PUNICODE_STRING FullImageName, _In_ HANDLE ProcessId, _In_ PIMAGE_INFO ImageInfo);
 void PushItem(LIST_ENTRY* entry);
 
 Globals g_Globals;
@@ -79,6 +80,14 @@ DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 		if (!NT_SUCCESS(status))
 		{
 			KdPrint((DRIVER_PREFIX "failed to set thread callbacks (0x%08X)\n", status));
+			break;
+		}
+
+		status = PsSetLoadImageNotifyRoutine(&OnLoadImageNotify);
+		if (!NT_SUCCESS(status))
+		{
+			KdPrint((DRIVER_PREFIX "failed to set image load notify callbacks (0x%08X)\n", status));
+			break;
 		}
 
 		break;
@@ -175,13 +184,12 @@ NTSTATUS DoraeMonRead(_In_ PDEVICE_OBJECT DeviceObject, _In_ PIRP  Irp)
 			g_Globals.ItemCount--;
 			memcpy(buffer, &info->Data, size);
 
-			// once data is copied to user buffer, free our pool
-			ExFreePool(CONTAINING_RECORD(entry, FullItem<ItemHeader>, Entry));
-
 			len -= size;
 			buffer += size;
 			count += size;
 
+			// once data is copied to user buffer, free our pool
+			ExFreePool(info);
 		}
 	}
 
@@ -194,8 +202,10 @@ NTSTATUS DoraeMonRead(_In_ PDEVICE_OBJECT DeviceObject, _In_ PIRP  Irp)
 
 void DoraeMonUnload(_In_ PDRIVER_OBJECT DriverObject)
 {
-	// unregister process notifications
+	// unregister process, thread and image load notifications
 	PsSetCreateProcessNotifyRoutineEx(OnProcessNotify, TRUE);
+	PsRemoveCreateThreadNotifyRoutine(&OnThreadNotify);
+	PsRemoveLoadImageNotifyRoutine(&OnLoadImageNotify);
 
 	UNICODE_STRING symLink = RTL_CONSTANT_STRING(SYMBOLIC_NAME);
 	IoDeleteSymbolicLink(&symLink);
@@ -230,7 +240,8 @@ void OnProcessNotify(_Inout_ PEPROCESS Process, _In_ HANDLE ProcessId, _Inout_op
 			commandLineSize = CreateInfo->CommandLine->Length;
 			allocSize += commandLineSize;
 		}
-		if (CreateInfo->ImageFileName)
+
+		if (CreateInfo->FileOpenNameAvailable && CreateInfo->ImageFileName)
 		{
 			imageFileNameSize = CreateInfo->ImageFileName->Length;
 			allocSize += imageFileNameSize;
@@ -337,6 +348,85 @@ void OnThreadNotify(HANDLE ProcessId, HANDLE ThreadId, BOOLEAN Create)
 	item.Type = Create ? ItemType::ThreadCreate : ItemType::ThreadExit;
 	item.ProcessId = HandleToULong(ProcessId);
 	item.ThreadId = HandleToULong(ThreadId);
+
+	PushItem(&info->Entry);
+}
+
+
+void OnLoadImageNotify(_In_opt_ PUNICODE_STRING FullImageName, _In_ HANDLE ProcessId, _In_ PIMAGE_INFO ImageInfo)
+{
+	NTSTATUS status = STATUS_SUCCESS;
+	PFLT_FILE_NAME_INFORMATION nameInfo = NULL;
+	USHORT fileNameSize = 0;
+	USHORT allocSize = sizeof(FullItem<ImageLoadedInfo>);
+
+	if (ImageInfo->SystemModeImage || HandleToUlong(ProcessId) == 0)
+		return;
+
+	// check if there's extended info
+	if (ImageInfo->ExtendedInfoPresent)
+	{
+		auto exinfo = CONTAINING_RECORD(ImageInfo, IMAGE_INFO_EX, ImageInfo);
+
+		status = FltGetFileNameInformationUnsafe(exinfo->FileObject, NULL, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT, &nameInfo);
+	}
+	
+	if (nameInfo && NT_SUCCESS(status))
+	{
+		fileNameSize = nameInfo->Name.Length;
+		allocSize += nameInfo->Name.Length;
+	}
+	else
+	{
+		if (FullImageName)
+		{
+			fileNameSize = FullImageName->Length;
+			allocSize += FullImageName->Length;
+		}
+	}
+
+	auto info = (FullItem<ImageLoadedInfo>*)ExAllocatePoolWithTag(PagedPool, allocSize, DRIVER_TAG);
+	if (info == nullptr)
+	{
+		KdPrint((DRIVER_PREFIX "failed allocation\n"));
+		return;
+	}
+	
+	// generic information
+	auto& item = info->Data;
+#ifdef WIN8_OR_UPPER
+	KeQuerySystemTimePrecise(&item.Time);
+#else
+	KeQuerySystemTime(&item.Time);
+#endif // WIN8_OR_UPPER
+	item.Type = ItemType::ImageLoaded;
+	item.size = (USHORT)sizeof(ImageLoadedInfo) + fileNameSize;
+	
+	// information about image loading
+	item.ImageBase = ImageInfo->ImageBase;
+	item.ProcessId = HandleToULong(ProcessId);
+
+	if (fileNameSize)
+	{
+		USHORT offset = sizeof(item);
+
+		item.FullImageNameOffset = offset;
+		item.FullImageNameLength = fileNameSize / sizeof(WCHAR);
+		if (nameInfo)
+		{
+			memcpy((UCHAR*)&item + offset, nameInfo->Name.Buffer, nameInfo->Name.Length);
+			FltReleaseFileNameInformation(nameInfo);
+		}
+		else
+		{
+			memcpy((UCHAR*)&item + offset, FullImageName->Buffer, nameInfo->Name.Length);
+		}
+	}
+	else
+	{
+		item.FullImageNameLength = 0;
+		item.FullImageNameOffset = 0;
+	}
 
 	PushItem(&info->Entry);
 }

@@ -4,5 +4,6 @@
 
 #include <ntddk.h>
 #include <windef.h>
+#include <fltkernel.h>
 
 #endif // !PCH_H
