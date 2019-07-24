@@ -57,6 +57,14 @@ VOID PrintHeader()
 	PrintDoraemon();
 }
 
+
+void DisplayBinary(const UCHAR* buffer, DWORD size) {
+	for (DWORD i = 0; i < size; i++)
+		printf("%02X ", buffer[i]);
+	printf("\n");
+}
+
+
 VOID PrintStructure(BYTE* buffer, ItemHeader* item)
 {
 
@@ -155,6 +163,53 @@ VOID PrintStructure(BYTE* buffer, ItemHeader* item)
 		}
 
 		break;
+	}
+	case ItemType::RegistrySetValue:
+	{
+		printf(" Registry Set Value\n");
+
+		auto info = (RegistrySetValueInfo*)buffer;
+		
+		printf("\tProcess ID: %X(%d)\n", info->ProcessId, info->ProcessId);
+		printf("\tThread ID: %X(%d)\n", info->ThreadId, info->ThreadId);
+		printf("\t%ws\\%ws\n", info->KeyName, info->ValueName);
+		printf("\tData Size: %d\n", info->DataSize);
+		if (processes.find(info->ProcessId) != processes.end())
+		{
+			wprintf(L"\tImage File Name: \"%ws\"\n", processes[info->ProcessId].c_str());
+			processes.erase(info->ProcessId);
+		}
+
+		printf("\tData Type: ");
+
+		switch (info->DataType)
+		{
+		case REG_DWORD:
+			printf("REG_DWORD\n");
+			printf("0x%08X\n", *(DWORD*)info->Data);
+			break;
+		case REG_SZ:
+			printf("REG_SZ\n");
+			printf("%ws\n", (WCHAR*)info->Data);
+			break;
+		case REG_EXPAND_SZ:
+			printf("REG_EXPAND_SZ\n");
+			printf("%ws\n", (WCHAR*)info->Data); 
+			break;
+		case REG_BINARY:
+			printf("REG_BINARY");
+			DisplayBinary(info->Data, min(info->DataSize, sizeof(info->Data)));
+			break;
+		case REG_QWORD:
+			printf("REG_QWORD");
+			printf("0x%16X\n", *(uint64_t*)info->Data);
+			break;
+		default:
+			printf("%d", info->DataType);
+			DisplayBinary(info->Data, min(info->DataSize, sizeof(info->Data)));
+			break;
+		}
+		
 	}
 	default:
 		break;

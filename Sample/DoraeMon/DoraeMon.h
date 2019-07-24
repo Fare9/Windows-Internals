@@ -17,6 +17,7 @@ typedef struct _Globals
 	LIST_ENTRY ItemsHead;
 	int ItemCount;
 	FastMutex Mutex;
+	LARGE_INTEGER RegCookie;
 } Globals, *PGlobals;
 
 

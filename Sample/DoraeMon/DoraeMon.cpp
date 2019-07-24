@@ -1,18 +1,24 @@
 #include "pch.h"
 
+// Headers
 #include "DoraeMonCommon.h"
 #include "DoraeMon.h"
 #include "AutoLock.h"
 
+// PROTOTYPES
 void DoraeMonUnload(_In_ PDRIVER_OBJECT DriverObject);
 NTSTATUS DoraeMonCreateClose(_In_ PDEVICE_OBJECT DeviceObject, _In_ PIRP  Irp);
 NTSTATUS DoraeMonRead(_In_ PDEVICE_OBJECT DeviceObject, _In_ PIRP  Irp);
 void OnProcessNotify(_Inout_ PEPROCESS Process, _In_ HANDLE ProcessId, _Inout_opt_ PPS_CREATE_NOTIFY_INFO CreateInfo);
 void OnThreadNotify(HANDLE ProcessId, HANDLE ThreadId, BOOLEAN Create);
 void OnLoadImageNotify(_In_opt_ PUNICODE_STRING FullImageName, _In_ HANDLE ProcessId, _In_ PIMAGE_INFO ImageInfo);
+NTSTATUS OnRegistryNotify(PVOID context, PVOID arg1, PVOID arg2);
 void PushItem(LIST_ENTRY* entry);
 
+// Globals
+
 Globals g_Globals;
+static const WCHAR machine[] = L"\\REGISTRY\\MACHINE\\";
 
 extern "C" NTSTATUS
 DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
@@ -87,6 +93,16 @@ DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 		if (!NT_SUCCESS(status))
 		{
 			KdPrint((DRIVER_PREFIX "failed to set image load notify callbacks (0x%08X)\n", status));
+			break;
+		}
+
+
+		// Callback for registers operations
+		UNICODE_STRING altitude = RTL_CONSTANT_STRING(L"7657.4846");
+		status = CmRegisterCallbackEx(OnRegistryNotify, &altitude, DriverObject, nullptr, &g_Globals.RegCookie, nullptr);
+		if (!NT_SUCCESS(status))
+		{
+			KdPrint((DRIVER_PREFIX "failed to set registry callback (%08X)\n", status));
 			break;
 		}
 
@@ -206,6 +222,7 @@ void DoraeMonUnload(_In_ PDRIVER_OBJECT DriverObject)
 	PsSetCreateProcessNotifyRoutineEx(OnProcessNotify, TRUE);
 	PsRemoveCreateThreadNotifyRoutine(&OnThreadNotify);
 	PsRemoveLoadImageNotifyRoutine(&OnLoadImageNotify);
+	CmUnRegisterCallback(g_Globals.RegCookie);
 
 	UNICODE_STRING symLink = RTL_CONSTANT_STRING(SYMBOLIC_NAME);
 	IoDeleteSymbolicLink(&symLink);
@@ -254,7 +271,7 @@ void OnProcessNotify(_Inout_ PEPROCESS Process, _In_ HANDLE ProcessId, _Inout_op
 			return;
 		}
 		auto& item = info->Data;
-#ifdef WIN8_OR_UPPER
+#if (NTDDI_VERSION >= NTDDI_WIN8)
 		KeQuerySystemTimePrecise(&item.Time);
 #else
 		KeQuerySystemTime(&item.Time);
@@ -305,7 +322,7 @@ void OnProcessNotify(_Inout_ PEPROCESS Process, _In_ HANDLE ProcessId, _Inout_op
 		}
 
 		auto& item = info->Data;
-#ifdef WIN8_OR_UPPER
+#if (NTDDI_VERSION >= NTDDI_WIN8)
 		KeQuerySystemTimePrecise(&item.Time);
 #else
 		KeQuerySystemTime(&item.Time);
@@ -338,7 +355,7 @@ void OnThreadNotify(HANDLE ProcessId, HANDLE ThreadId, BOOLEAN Create)
 	}
 
 	auto &item = info->Data;
-#ifdef WIN8_OR_UPPER
+#if (NTDDI_VERSION >= NTDDI_WIN8)
 	KeQuerySystemTimePrecise(&item.Time);
 #else
 	KeQuerySystemTime(&item.Time);
@@ -394,7 +411,7 @@ void OnLoadImageNotify(_In_opt_ PUNICODE_STRING FullImageName, _In_ HANDLE Proce
 	
 	// generic information
 	auto& item = info->Data;
-#ifdef WIN8_OR_UPPER
+#if (NTDDI_VERSION >= NTDDI_WIN8)
 	KeQuerySystemTimePrecise(&item.Time);
 #else
 	KeQuerySystemTime(&item.Time);
@@ -429,4 +446,76 @@ void OnLoadImageNotify(_In_opt_ PUNICODE_STRING FullImageName, _In_ HANDLE Proce
 	}
 
 	PushItem(&info->Entry);
+}
+
+
+NTSTATUS OnRegistryNotify(PVOID context, PVOID arg1, PVOID arg2)
+{
+	UNREFERENCED_PARAMETER(context);
+
+	switch ((REG_NOTIFY_CLASS)(ULONG_PTR)arg1)
+	{
+	case RegNtPostSetValueKey:
+	{
+		auto args = (REG_POST_OPERATION_INFORMATION*)arg2;
+		if (!NT_SUCCESS(args->Status)) // check status of operation was correct
+			break;
+
+		PCUNICODE_STRING name;
+
+#if (NTDDI_VERSION >= NTDDI_WIN8)
+		if (NT_SUCCESS(CmCallbackGetKeyObjectIDEx(&g_Globals.RegCookie, args->Object, nullptr, &name, 0)))
+		{
+#else
+		if (NT_SUCCESS(CmCallbackGetKeyObjectID(&g_Globals.RegCookie, args->Object, nullptr, &name)))
+		{
+#endif
+			// filter out those are not HKLM writes
+			if (::wcsncmp(name->Buffer, machine, ARRAYSIZE(machine) - 1) == 0)
+			{
+				auto preInfo = (REG_SET_VALUE_KEY_INFORMATION*)args->PreInformation;
+				NT_ASSERT(preInfo);
+
+				auto size = sizeof(FullItem<RegistrySetValueInfo>);
+				auto info = (FullItem<RegistrySetValueInfo>*)ExAllocatePoolWithTag(PagedPool, size, DRIVER_TAG);
+
+				if (info == nullptr)
+					break;
+
+				// zero out structure to make sure strings are null-terminated when copied
+				RtlZeroMemory(info, size);
+
+				// fill standard data
+				auto& item = info->Data;
+#if (NTDDI_VERSION >= NTDDI_WIN8)
+				KeQuerySystemTimePrecise(&item.Time);
+#else
+				KeQuerySystemTime(&item.Time);
+#endif // WIN8_OR_UPPER
+				item.size = sizeof(item);
+				item.Type = ItemType::RegistrySetValue;
+
+				// get client PID/TID (this is our caller)
+				item.ProcessId = HandleToULong(PsGetCurrentProcessId());
+				item.ThreadId = HandleToULong(PsGetCurrentThread());
+
+				// get specific key/value data
+				::wcsncpy_s(item.KeyName, name->Buffer, name->Length / sizeof(WCHAR) - 1);
+				::wcsncpy_s(item.ValueName, preInfo->ValueName->Buffer, preInfo->ValueName->Length / sizeof(WCHAR) - 1);
+				item.DataType = preInfo->Type;
+				item.DataSize = preInfo->DataSize;
+				::memcpy(item.Data, preInfo->Data, min(item.DataSize, sizeof(item.Data)));
+
+				PushItem(&info->Entry);
+			}
+#if (NTDDI_VERSION >= NTDDI_WIN8)
+			CmCallbackReleaseKeyObjectIDEx(name);
+#endif
+		}
+	}
+	default:
+		break;
+	}
+
+	return STATUS_SUCCESS;
 }

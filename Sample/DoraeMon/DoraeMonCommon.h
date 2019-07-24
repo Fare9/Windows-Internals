@@ -2,6 +2,10 @@
 #ifndef DORAEMONCOMMON_H
 #define DORAEMONCOMMON_H
 
+#define MAX_KEY_NAME 256
+#define VALUE_NAME 64
+#define MAX_DATA 128
+
 // short enumeration for processes
 enum class ItemType : short
 {
@@ -10,7 +14,8 @@ enum class ItemType : short
 	ProcessExit,
 	ThreadCreate,
 	ThreadExit,
-	ImageLoaded
+	ImageLoaded,
+	RegistrySetValue
 };
 
 // Main Base struct
@@ -51,6 +56,18 @@ struct ImageLoadedInfo : ItemHeader
 	PVOID ImageBase;
 	USHORT FullImageNameLength;
 	USHORT FullImageNameOffset;
+};
+
+
+struct RegistrySetValueInfo : ItemHeader
+{
+	ULONG ProcessId;
+	ULONG ThreadId;
+	WCHAR KeyName[MAX_KEY_NAME];	// full key name
+	WCHAR ValueName[VALUE_NAME];	// value name
+	ULONG DataType;					// REG_xxx
+	UCHAR Data[MAX_DATA];			// data
+	ULONG DataSize;					// size of data
 };
 
 #endif // !DORAEMONCOMMON_H
